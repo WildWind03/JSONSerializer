@@ -14,29 +14,29 @@ namespace JSONSerializer
     [Serializable]
     class TestClass
     {
-        public int i = 5;
-        public string s = "Hey";
+        public int I = 5;
+        public string S = "Hey";
 
-        [NonSerialized] public string ignore; // это поле не должно сериализоваться
+        [NonSerialized] public string Ignore; // это поле не должно сериализоваться
 
-        public MyClass[] arrayMember = {new MyClass(), new MyClass(), new MyClass()};
-        public List<int> myList = new List<int>(5);
-        public List<String> names = new List<string>();
-        public List<MyClass> myClassList = new List<MyClass>();
+        public MyClass[] ArrayMember = {new MyClass(), new MyClass(), new MyClass()};
+        public List<int> MyList = new List<int>(5);
+        public List<string> Names = new List<string>();
+        public List<MyClass> MyClassList = new List<MyClass>();
 
-        public Dictionary<int, int> dictionary = new Dictionary<int, int>();
+        public Dictionary<int, int> Dictionary = new Dictionary<int, int>();
 
         public TestClass()
         {
-            myList.Add(56);
-            myList.Add(32);
-            dictionary.Add(45, 21);
-            dictionary.Add(34, 56);
-            names.Add("Alexander");
-            names.Add("Chirikhin");
+            MyList.Add(56);
+            MyList.Add(32);
+            Dictionary.Add(45, 21);
+            Dictionary.Add(34, 56);
+            Names.Add("Alexander");
+            Names.Add("Chirikhin");
 
-            myClassList.Add(new MyClass());
-            myClassList.Add(new MyClass());
+            MyClassList.Add(new MyClass());
+            MyClassList.Add(new MyClass());
         }
     }
 
@@ -48,13 +48,13 @@ namespace JSONSerializer
 
     class AnotherClass
     {
-        public TestClass testClass = new TestClass();
-        public TestClass testClass1 = new TestClass();
+        public TestClass TestClass = new TestClass();
+        public TestClass TestClass1 = new TestClass();
     }
 
-    class Program
+    public class Program
     {
-        static void Main(string[] args)
+        public static void Main(string[] args)
         {
             Console.WriteLine(JsonSerializer.ToJson(new AnotherClass()));
             Console.ReadKey();
@@ -70,150 +70,151 @@ namespace JSONSerializer
 
         private static string ToJson(object objectToSerialize, int order)
         {
-            string json = GenerateTabs(order) + "{\n";
+            var jsonBuilder = new StringBuilder();
+
+            jsonBuilder.Append(GenerateTabs(order) + "{\n");
+
             var fieldValues = objectToSerialize.GetType().GetFields(BindingFlags.Public |
                                                                     BindingFlags.NonPublic |
                                                                     BindingFlags.Instance);
 
-            int countOfFields = fieldValues.Length;
-            int currentFieldNum = 0;
+            var countOfFields = fieldValues.Length;
+            var currentFieldNum = 0;
 
-            foreach (FieldInfo fieldInfo in fieldValues)
+            foreach (var fieldInfo in fieldValues)
             {
                 currentFieldNum++;
-                if (!fieldInfo.IsNotSerialized)
+                if (fieldInfo.IsNotSerialized) continue;
+                if (fieldInfo.FieldType.IsPrimitive || fieldInfo.FieldType == typeof(string)
+                    || fieldInfo.FieldType == typeof(decimal) || fieldInfo.FieldType == typeof(DateTime)
+                    || fieldInfo.FieldType == typeof(TimeSpan) || fieldInfo.FieldType == typeof(DateTimeOffset))
                 {
-                    if (fieldInfo.FieldType.IsPrimitive || fieldInfo.FieldType == typeof(string)
-                        || fieldInfo.FieldType == typeof(decimal) || fieldInfo.FieldType == typeof(DateTime)
-                        || fieldInfo.FieldType == typeof(TimeSpan) || fieldInfo.FieldType == typeof(DateTimeOffset))
-                    {
-                        var newFieldValue = Concat(GenerateTabs(order + 1), "\"", fieldInfo.Name + "\": \"",
-                            fieldInfo.GetValue(objectToSerialize), "\",\n");
+                    var newFieldValue = Concat(GenerateTabs(order + 1), "\"", fieldInfo.Name + "\": \"",
+                        fieldInfo.GetValue(objectToSerialize), "\",\n");
 
-                        json += newFieldValue;
-                    }
-                    else if (fieldInfo.FieldType.IsArray || fieldInfo.GetValue(objectToSerialize) is IList)
+                    jsonBuilder.Append(newFieldValue);
+                }
+                else if (fieldInfo.FieldType.IsArray || fieldInfo.GetValue(objectToSerialize) is IList)
+                {
+                    var enumerable = (IList) fieldInfo.GetValue(objectToSerialize);
+                    if (null == enumerable) continue;
+                    var serializedObjectsBuilder = new StringBuilder();
+                    serializedObjectsBuilder.Append(Concat(GenerateTabs(order + 1), "\"", fieldInfo.Name, "\": ", "["));
+
+                    var currentSize = 0;
+                    var maxSize = enumerable.Count;
+
+
+                    foreach (var i in enumerable)
                     {
-                        var enumerable = (IList) fieldInfo.GetValue(objectToSerialize);
-                        if (null != enumerable)
+                        if (i.GetType().IsPrimitive)
                         {
-                            string serializedObjects = GenerateTabs(order + 1) + "\"" + fieldInfo.Name + "\": " + "[";
-
-                            int currentSize = 0;
-                            int maxSize = enumerable.Count;
-
-
-                            foreach (var i in enumerable)
+                            serializedObjectsBuilder.Append(i);
+                            if (currentSize < maxSize - 1)
                             {
-                                if (i.GetType().IsPrimitive)
-                                {
-                                    serializedObjects += i;
-                                    if (currentSize < maxSize - 1)
-                                    {
-                                        serializedObjects += ", ";
-                                    }
+                                serializedObjectsBuilder.Append(", ");
+                            }
 
-                                    if (currentSize++ >= maxSize - 1)
-                                    {
-                                        if (currentFieldNum < countOfFields - 1)
-                                        {
-                                            serializedObjects += "],\n";
-                                        }
-                                        else
-                                        {
-                                            serializedObjects += "]\n";
-                                        }
-                                    }
-                                }
-                                else if (i is string)
+                            if (currentSize++ >= maxSize - 1)
+                            {
+                                if (currentFieldNum < countOfFields - 1)
                                 {
-                                    serializedObjects += (" " + "\"" + i + "\"");
-                                    if (currentSize < maxSize - 1)
-                                    {
-                                        serializedObjects += ", ";
-                                    }
-
-                                    if (currentSize++ >= maxSize - 1)
-                                    {
-                                        if (currentFieldNum < countOfFields - 1)
-                                        {
-                                            serializedObjects += "],\n";
-                                        }
-                                        else
-                                        {
-                                            serializedObjects += "]\n";
-                                        }
-                                    }
+                                    serializedObjectsBuilder.Append("],\n");
                                 }
                                 else
                                 {
-                                    if (currentSize == 0)
-                                    {
-                                        serializedObjects += "\n";
-                                    }
-
-                                    serializedObjects += ToJson(i, order + 2);
-
-                                    if (currentSize < maxSize - 1)
-                                    {
-                                        serializedObjects += ",\n";
-                                    }
-                                    else
-                                    {
-                                        serializedObjects += "\n";
-                                    }
-
-                                    if (currentSize++ >= maxSize - 1)
-                                    {
-                                        if (currentFieldNum < countOfFields - 1)
-                                        {
-                                            serializedObjects += GenerateTabs(order + 1) + "],\n";
-
-                                        }
-                                        else
-                                        {
-                                            serializedObjects += GenerateTabs(order + 1) + "]\n";
-                                        }
-                                    }
+                                    serializedObjectsBuilder.Append("]\n");
                                 }
                             }
-
-                            json += serializedObjects;
                         }
-                    }
-                    else if (fieldInfo.GetValue(objectToSerialize) is IDictionary)
-                    {
-
-                    }
-                    else
-                    {
-                        if (currentFieldNum < countOfFields)
+                        else if (i is string)
                         {
-                            string serializedObject = ToJson(fieldInfo.GetValue(objectToSerialize), order + 1) + ",\n";
-                            json += serializedObject;
+                            serializedObjectsBuilder.Append(Concat("\"", i, "\""));
+                            if (currentSize < maxSize - 1)
+                            {
+                                serializedObjectsBuilder.Append(", ");
+                            }
+
+                            if (currentSize++ >= maxSize - 1)
+                            {
+                                if (currentFieldNum < countOfFields - 1)
+                                {
+                                    serializedObjectsBuilder.Append("],\n");
+                                }
+                                else
+                                {
+                                    serializedObjectsBuilder.Append("]\n");
+                                }
+                            }
                         }
                         else
                         {
-                            string serializedObject = ToJson(fieldInfo.GetValue(objectToSerialize), order + 1) + "\n";
-                            json += serializedObject;
+                            if (currentSize == 0)
+                            {
+                                serializedObjectsBuilder.Append("\n");
+                            }
+
+                            serializedObjectsBuilder.Append(ToJson(i, order + 2));
+
+                            if (currentSize < maxSize - 1)
+                            {
+                                serializedObjectsBuilder.Append(",\n");
+                            }
+                            else
+                            {
+                                serializedObjectsBuilder.Append("\n");
+                            }
+
+                            if (currentSize++ >= maxSize - 1)
+                            {
+                                if (currentFieldNum < countOfFields - 1)
+                                {
+                                    serializedObjectsBuilder.Append(GenerateTabs(order + 1) + "],\n");
+
+                                }
+                                else
+                                {
+                                    serializedObjectsBuilder.Append(GenerateTabs(order + 1) + "]\n");
+                                }
+                            }
                         }
                     }
+
+                    jsonBuilder.Append(serializedObjectsBuilder);
+                }
+                else if (fieldInfo.GetValue(objectToSerialize) is IDictionary)
+                {
+
+                }
+                else
+                {
+                    string serializedObject;
+                    if (currentFieldNum < countOfFields)
+                    {
+                        serializedObject = ToJson(fieldInfo.GetValue(objectToSerialize), order + 1) + ",\n";
+                    }
+                    else
+                    {
+                        serializedObject = ToJson(fieldInfo.GetValue(objectToSerialize), order + 1) + "\n";
+                    }
+
+                    jsonBuilder.Append(serializedObject);
                 }
             }
 
-            json += GenerateTabs(order) + "}";
-            return json;
+            jsonBuilder.Append(GenerateTabs(order) + "}");
+            return jsonBuilder.ToString();
         }
 
-        private static String GenerateTabs(int count)
+        private static string GenerateTabs(int count)
         {
-            string tabs = "";
+            StringBuilder tabsBuilder = new StringBuilder();
             for (int k = 0; k < count; ++k)
             {
-                tabs += "\t";
+                tabsBuilder.Append("\t");
             }
 
-            return tabs;
+            return tabsBuilder.ToString();
         }
     }
 }
