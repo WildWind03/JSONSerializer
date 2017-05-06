@@ -1,12 +1,8 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
-using System.Threading.Tasks;
 using static System.String;
 
 namespace JSONSerializer
@@ -14,207 +10,166 @@ namespace JSONSerializer
     [Serializable]
     class TestClass
     {
-        public int I = 5;
-        public string S = "Hey";
+        public bool TestBoolean = true;
+        public int TestIntegerValue = 5;
+        public string TestStringValue = "TestString\"";
+        public double Hah = double.NaN; //Accroding to JSON standart NaN values shoudn't be serialized
+        public decimal TestDecimalValues = new decimal(0.5);
+        public DateTime TestDateTime = DateTime.Now;
 
-        [NonSerialized] public string Ignore; // это поле не должно сериализоваться
+        [NonSerialized] public string Ignore = null; //Non serialized values won't be serialized
 
-        public MyClass[] ArrayMember = {new MyClass(), new MyClass(), new MyClass()};
-        public List<int> MyList = new List<int>(5);
-        public List<string> Names = new List<string>();
-        public List<MyClass> MyClassList = new List<MyClass>();
-
+        public TestNestedClass[] ArrayMember = {new TestNestedClass(1, 2), new TestNestedClass(3, 4)};
+        public List<string> StringList = new List<string>();
         public Dictionary<int, int> Dictionary = new Dictionary<int, int>();
+        public List<string> List = new List<string>();
 
         public TestClass()
         {
-            MyList.Add(56);
-            MyList.Add(32);
             Dictionary.Add(45, 21);
             Dictionary.Add(34, 56);
-            Names.Add("Alexander");
-            Names.Add("Chirikhin");
 
-            MyClassList.Add(new MyClass());
-            MyClassList.Add(new MyClass());
+            StringList.Add("Alexander");
+            StringList.Add("Chirikhin");
         }
     }
 
-    class MyClass
+    class TestNestedClass
     {
-        public int Ff = 78;
-        public int HeyHey = 98;
-    }
+        public int NestedValue1;
+        public int NestedValue2;
 
-    class AnotherClass
-    {
-        public TestClass TestClass = new TestClass();
-        public TestClass TestClass1 = new TestClass();
+        public TestNestedClass(int value1, int value2)
+        {
+            NestedValue1 = value1;
+            NestedValue2 = value2;
+        }
     }
 
     public class Program
     {
         public static void Main(string[] args)
         {
-            Console.WriteLine(JsonSerializer.ToJson(new AnotherClass()));
+            Console.WriteLine(JsonSerializer.ToJson(new TestClass()));
             Console.ReadKey();
         }
     }
 
     public static class JsonSerializer
     {
+
+        private static bool IsNanOrInfinity(this object obj)
+        {
+            if (obj is double)
+            {
+                return double.IsNaN((double) obj) || double.IsInfinity((double) obj);
+            }
+
+            if (obj is float)
+            {
+                return float.IsNaN((float) obj) || float.IsInfinity((float) obj);
+            }
+
+            return false;
+        }
+
         public static string ToJson(object objectToSerialize)
         {
-            return ToJson(objectToSerialize, 0);
-        }
+            if (null == objectToSerialize)
+            {
+                return "null";
+            }
 
-        private static string ToJson(object objectToSerialize, int order)
-        {
+            if (!objectToSerialize.GetType().IsSerializable)
+            {
+                return null;
+            }
+
+            if (objectToSerialize.GetType().IsPrimitive || objectToSerialize is decimal ||
+                objectToSerialize is DateTime || objectToSerialize is TimeSpan || objectToSerialize is DateTimeOffset)
+            {
+                return IsNanOrInfinity(objectToSerialize) ? null : objectToSerialize.ToString().ToLower();
+            }
+
+            if (objectToSerialize is string)
+            {
+                string serializableString = objectToSerialize?.ToString().Replace("\"", "\\\"");
+                return Concat("\"", serializableString, "\"");
+            }
+
+            if (objectToSerialize is IDictionary)
+            {
+                var jsonDictionaryBuilder = new StringBuilder();
+                jsonDictionaryBuilder.Append(Concat("\"", objectToSerialize.GetType().Name, "\":{"));
+
+                var iDictionary = (IDictionary) objectToSerialize;
+
+                foreach (var i in iDictionary.Keys)
+                {
+                    var value = iDictionary[i];
+                    jsonDictionaryBuilder.Append(Concat("\"", i, "\":", ToJson(value), ","));
+                }
+
+                string jsonEnumerableString = jsonDictionaryBuilder.ToString();
+                if (jsonEnumerableString[jsonEnumerableString.Length - 1] == ',')
+                {
+                    jsonEnumerableString = jsonEnumerableString.Substring(0, jsonEnumerableString.Length - 1);
+                }
+
+                return jsonEnumerableString + "}";
+            }
+
+            if (objectToSerialize is IEnumerable)
+            {
+                var jsonEnumerableBuilder = new StringBuilder();
+                jsonEnumerableBuilder.Append("\"" + objectToSerialize.GetType().Name + "\":[");
+
+                foreach (var i in (IEnumerable) objectToSerialize)
+                {
+                    jsonEnumerableBuilder.Append(ToJson(i) + ",");
+                }
+
+                string jsonEnumerableString = jsonEnumerableBuilder.ToString();
+                if (jsonEnumerableString[jsonEnumerableString.Length - 1] == ',')
+                {
+                    jsonEnumerableString = jsonEnumerableString.Substring(0, jsonEnumerableString.Length - 1);
+                }
+
+                return jsonEnumerableString + "]";
+            }
+
             var jsonBuilder = new StringBuilder();
 
-            jsonBuilder.Append(GenerateTabs(order) + "{\n");
+            jsonBuilder.Append("{");
 
             var fieldValues = objectToSerialize.GetType().GetFields(BindingFlags.Public |
-                                                                    BindingFlags.NonPublic |
-                                                                    BindingFlags.Instance);
-
-            var countOfFields = fieldValues.Length;
-            var currentFieldNum = 0;
-
+                                                                    BindingFlags.NonPublic
+                                                                    | BindingFlags.Instance);
             foreach (var fieldInfo in fieldValues)
             {
-                currentFieldNum++;
-                if (fieldInfo.IsNotSerialized) continue;
-                if (fieldInfo.FieldType.IsPrimitive || fieldInfo.FieldType == typeof(string)
-                    || fieldInfo.FieldType == typeof(decimal) || fieldInfo.FieldType == typeof(DateTime)
-                    || fieldInfo.FieldType == typeof(TimeSpan) || fieldInfo.FieldType == typeof(DateTimeOffset))
+                if (fieldInfo.IsNotSerialized)
                 {
-                    var newFieldValue = Concat(GenerateTabs(order + 1), "\"", fieldInfo.Name + "\": \"",
-                        fieldInfo.GetValue(objectToSerialize), "\",\n");
-
-                    jsonBuilder.Append(newFieldValue);
+                    continue;
                 }
-                else if (fieldInfo.FieldType.IsArray || fieldInfo.GetValue(objectToSerialize) is IList)
+
+                var serializedField = ToJson(fieldInfo.GetValue(objectToSerialize));
+
+                if (null == serializedField)
                 {
-                    var enumerable = (IList) fieldInfo.GetValue(objectToSerialize);
-                    if (null == enumerable) continue;
-                    var serializedObjectsBuilder = new StringBuilder();
-                    serializedObjectsBuilder.Append(Concat(GenerateTabs(order + 1), "\"", fieldInfo.Name, "\": ", "["));
-
-                    var currentSize = 0;
-                    var maxSize = enumerable.Count;
-
-
-                    foreach (var i in enumerable)
-                    {
-                        if (i.GetType().IsPrimitive)
-                        {
-                            serializedObjectsBuilder.Append(i);
-                            if (currentSize < maxSize - 1)
-                            {
-                                serializedObjectsBuilder.Append(", ");
-                            }
-
-                            if (currentSize++ >= maxSize - 1)
-                            {
-                                if (currentFieldNum < countOfFields - 1)
-                                {
-                                    serializedObjectsBuilder.Append("],\n");
-                                }
-                                else
-                                {
-                                    serializedObjectsBuilder.Append("]\n");
-                                }
-                            }
-                        }
-                        else if (i is string)
-                        {
-                            serializedObjectsBuilder.Append(Concat("\"", i, "\""));
-                            if (currentSize < maxSize - 1)
-                            {
-                                serializedObjectsBuilder.Append(", ");
-                            }
-
-                            if (currentSize++ >= maxSize - 1)
-                            {
-                                if (currentFieldNum < countOfFields - 1)
-                                {
-                                    serializedObjectsBuilder.Append("],\n");
-                                }
-                                else
-                                {
-                                    serializedObjectsBuilder.Append("]\n");
-                                }
-                            }
-                        }
-                        else
-                        {
-                            if (currentSize == 0)
-                            {
-                                serializedObjectsBuilder.Append("\n");
-                            }
-
-                            serializedObjectsBuilder.Append(ToJson(i, order + 2));
-
-                            if (currentSize < maxSize - 1)
-                            {
-                                serializedObjectsBuilder.Append(",\n");
-                            }
-                            else
-                            {
-                                serializedObjectsBuilder.Append("\n");
-                            }
-
-                            if (currentSize++ >= maxSize - 1)
-                            {
-                                if (currentFieldNum < countOfFields - 1)
-                                {
-                                    serializedObjectsBuilder.Append(GenerateTabs(order + 1) + "],\n");
-
-                                }
-                                else
-                                {
-                                    serializedObjectsBuilder.Append(GenerateTabs(order + 1) + "]\n");
-                                }
-                            }
-                        }
-                    }
-
-                    jsonBuilder.Append(serializedObjectsBuilder);
+                    continue;
                 }
-                else if (fieldInfo.GetValue(objectToSerialize) is IDictionary)
-                {
 
-                }
-                else
-                {
-                    string serializedObject;
-                    if (currentFieldNum < countOfFields)
-                    {
-                        serializedObject = ToJson(fieldInfo.GetValue(objectToSerialize), order + 1) + ",\n";
-                    }
-                    else
-                    {
-                        serializedObject = ToJson(fieldInfo.GetValue(objectToSerialize), order + 1) + "\n";
-                    }
-
-                    jsonBuilder.Append(serializedObject);
-                }
+                jsonBuilder.Append(Concat("\"", fieldInfo.Name, "\":", serializedField, ","));
             }
 
-            jsonBuilder.Append(GenerateTabs(order) + "}");
-            return jsonBuilder.ToString();
-        }
+            var serializedObjects = jsonBuilder.ToString();
 
-        private static string GenerateTabs(int count)
-        {
-            StringBuilder tabsBuilder = new StringBuilder();
-            for (int k = 0; k < count; ++k)
+            if (serializedObjects[serializedObjects.Length - 1] == ',')
             {
-                tabsBuilder.Append("\t");
+                serializedObjects = serializedObjects.Substring(0, serializedObjects.Length - 1);
             }
 
-            return tabsBuilder.ToString();
+            return serializedObjects + "}";
         }
     }
 }
