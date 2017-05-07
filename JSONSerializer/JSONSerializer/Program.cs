@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using static System.String;
@@ -10,6 +11,7 @@ namespace JSONSerializer
     [Serializable]
     class TestClass
     {
+        public TestNestedClass TestNestedClass = new TestNestedClass(3, 4);
         public bool TestBoolean = true;
         public int TestIntegerValue = 5;
         public string TestStringValue = "TestString\"";
@@ -88,7 +90,13 @@ namespace JSONSerializer
             if (objectToSerialize.GetType().IsPrimitive || objectToSerialize is decimal ||
                 objectToSerialize is DateTime || objectToSerialize is TimeSpan || objectToSerialize is DateTimeOffset)
             {
-                return IsNanOrInfinity(objectToSerialize) ? null : objectToSerialize.ToString().ToLower();
+                if (IsNanOrInfinity(objectToSerialize))
+                {
+                    return null;
+                }
+
+                return IsNanOrInfinity(objectToSerialize) ? null : 
+                    Format(CultureInfo.InvariantCulture, "{0}", objectToSerialize.ToString().ToLower());
             }
 
             if (objectToSerialize is string)
@@ -100,7 +108,7 @@ namespace JSONSerializer
             if (objectToSerialize is IDictionary)
             {
                 var jsonDictionaryBuilder = new StringBuilder();
-                jsonDictionaryBuilder.Append(Concat("\"", objectToSerialize.GetType().Name, "\":{"));
+                jsonDictionaryBuilder.Append("{");
 
                 var iDictionary = (IDictionary) objectToSerialize;
 
@@ -122,11 +130,14 @@ namespace JSONSerializer
             if (objectToSerialize is IEnumerable)
             {
                 var jsonEnumerableBuilder = new StringBuilder();
-                jsonEnumerableBuilder.Append("\"" + objectToSerialize.GetType().Name + "\":[");
+                jsonEnumerableBuilder.Append("[");
 
                 foreach (var i in (IEnumerable) objectToSerialize)
                 {
-                    jsonEnumerableBuilder.Append(ToJson(i) + ",");
+                    if (i.GetType().IsSerializable)
+                    {
+                        jsonEnumerableBuilder.Append(ToJson(i) + ",");
+                    }
                 }
 
                 string jsonEnumerableString = jsonEnumerableBuilder.ToString();
