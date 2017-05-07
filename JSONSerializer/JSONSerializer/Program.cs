@@ -9,7 +9,7 @@ using static System.String;
 namespace JSONSerializer
 {
     [Serializable]
-    class TestClass
+    public class TestClass
     {
         public TestNestedClass TestNestedClass = new TestNestedClass(3, 4);
         public bool TestBoolean = true;
@@ -37,7 +37,7 @@ namespace JSONSerializer
         }
     }
 
-    class TestNestedClass
+    public class TestNestedClass
     {
         public int NestedValue1;
         public int NestedValue2;
@@ -53,11 +53,7 @@ namespace JSONSerializer
     {
         public static void Main(string[] args)
         {
-            System.IO.File.WriteAllLines(@"C:\Users\userg\Documents\WriteLines.json", new[] {
-            JsonSerializer.ToJson(new TestClass())
-        });
-
-        Console.WriteLine(JsonSerializer.ToJson(new TestClass()));
+            Console.WriteLine(JsonSerializer.ToJson(new TestClass()));
             Console.ReadKey();
         }
     }
@@ -103,7 +99,7 @@ namespace JSONSerializer
                 objectToSerialize is TimeSpan || 
                 objectToSerialize is DateTimeOffset)
             {
-                string serializableString = objectToSerialize.ToString().Replace("\"", "\\\"");
+                var serializableString = objectToSerialize.ToString().Replace("\"", "\\\"");
                 return Concat("\"", serializableString, "\"");
             }
 
@@ -142,7 +138,7 @@ namespace JSONSerializer
                     }
                 }
 
-                string jsonEnumerableString = jsonEnumerableBuilder.ToString();
+                var jsonEnumerableString = jsonEnumerableBuilder.ToString();
                 if (jsonEnumerableString[jsonEnumerableString.Length - 1] == ',')
                 {
                     jsonEnumerableString = jsonEnumerableString.Substring(0, jsonEnumerableString.Length - 1);
