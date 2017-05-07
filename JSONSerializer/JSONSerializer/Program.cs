@@ -18,6 +18,7 @@ namespace JSONSerializer
         public double Hah = double.NaN; //Accroding to JSON standart NaN values shoudn't be serialized
         public decimal TestDecimalValues = new decimal(0.5);
         public DateTime TestDateTime = DateTime.Now;
+        public TestNestedClass TestNestedClassNull = null;
 
         [NonSerialized] public string Ignore = null; //Non serialized values won't be serialized
 
@@ -52,7 +53,11 @@ namespace JSONSerializer
     {
         public static void Main(string[] args)
         {
-            Console.WriteLine(JsonSerializer.ToJson(new TestClass()));
+            System.IO.File.WriteAllLines(@"C:\Users\userg\Documents\WriteLines.json", new[] {
+            JsonSerializer.ToJson(new TestClass())
+        });
+
+        Console.WriteLine(JsonSerializer.ToJson(new TestClass()));
             Console.ReadKey();
         }
     }
@@ -87,21 +92,18 @@ namespace JSONSerializer
                 return null;
             }
 
-            if (objectToSerialize.GetType().IsPrimitive || objectToSerialize is decimal ||
-                objectToSerialize is DateTime || objectToSerialize is TimeSpan || objectToSerialize is DateTimeOffset)
+            if (objectToSerialize.GetType().IsPrimitive || objectToSerialize is decimal)
             {
-                if (IsNanOrInfinity(objectToSerialize))
-                {
-                    return null;
-                }
-
                 return IsNanOrInfinity(objectToSerialize) ? null : 
                     Format(CultureInfo.InvariantCulture, "{0}", objectToSerialize.ToString().ToLower());
             }
 
-            if (objectToSerialize is string)
+            if (objectToSerialize is string || 
+                objectToSerialize is DateTime || 
+                objectToSerialize is TimeSpan || 
+                objectToSerialize is DateTimeOffset)
             {
-                string serializableString = objectToSerialize?.ToString().Replace("\"", "\\\"");
+                string serializableString = objectToSerialize.ToString().Replace("\"", "\\\"");
                 return Concat("\"", serializableString, "\"");
             }
 
@@ -118,7 +120,7 @@ namespace JSONSerializer
                     jsonDictionaryBuilder.Append(Concat("\"", i, "\":", ToJson(value), ","));
                 }
 
-                string jsonEnumerableString = jsonDictionaryBuilder.ToString();
+                var jsonEnumerableString = jsonDictionaryBuilder.ToString();
                 if (jsonEnumerableString[jsonEnumerableString.Length - 1] == ',')
                 {
                     jsonEnumerableString = jsonEnumerableString.Substring(0, jsonEnumerableString.Length - 1);
